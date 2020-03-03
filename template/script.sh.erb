@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-<%- gpu = context.node_type.include?("vis") -%>
-
 # Clean the environment
 module purge
 
@@ -9,42 +7,33 @@ module purge
 cd "${HOME}"
 
 #
-# Launch Fluxbox
+# Launch Xfce Window Manager and Panel
 #
 
-# Create Fluxbox root or it will override the below init file
 (
-  umask 077
-  mkdir -p "${HOME}/.fluxbox"
-)
-
-# Start the Fluxbox window manager (it likes to crash on occassion, make it
-# persistent)
-(
-until fluxbox -display "${DISPLAY}.0" -rc "<%= session.staged_root.join("fluxbox.rc") %>"; do
-    echo "Fluxbox crashed with exit code $?. Respawning..." >&2
-    sleep 1
-  done
+  export SEND_256_COLORS_TO_REMOTE=1
+  export XDG_CONFIG_HOME="<%= session.staged_root.join("config") %>"
+  export XDG_DATA_HOME="<%= session.staged_root.join("share") %>"
+  export XDG_CACHE_HOME="$(mktemp -d)"
+  module restore
+  set -x
+  xfwm4 --compositor=off --daemon --sm-client-disable
+  xsetroot -solid "#D3D3D3"
+  xfsettingsd --sm-client-disable
+  xfce4-panel --sm-client-disable
 ) &
 
 #
-# Start Abaqus
+# Start COMSOL Multiphysics
 #
 
 # Load the required environment
-module load xalt/latest intel/18.0.3 <%= context.version %>
+module load intel <%= context.version %>
 
-# Output debug information
+# Launch COMSOL Multiphysics
 module list
-
-# Launch Abaqus
 set -x
-<%- if gpu -%>
-module load virtualgl
-vglrun abaqus cae \
-<%- else -%>
 abaqus cae -mesa \
-<%- end -%>
   |& tee "<%= session.staged_root.join("abaqus.log") %>"
 ABAQUS_EXIT_CODE=${PIPESTATUS[0]}
 { set +x; } 2>/dev/null
@@ -52,7 +41,6 @@ ABAQUS_EXIT_CODE=${PIPESTATUS[0]}
 if [[ ${ABAQUS_EXIT_CODE} -ne 0 ]]; then
 cat | xmessage -file - -center <<- EOL
 ABAQUS/CAE died with the following output:
-
 $(cat "<%= session.staged_root.join("abaqus.log") %>")
 EOL
 fi
